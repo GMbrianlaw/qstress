@@ -1,55 +1,76 @@
 import filecmp
 import pathlib
 import shutil
-import subprocess
 import typing
 
-import rich
+import rich.panel
 import typer
 
-from .config import default_config
-from .config import get_config
-from .config import qstress_path
+from .config import cur_config
+from .util import compile_file
+from .util import console
+from .util import data_path
+from .util import get_path
+from .util import run_bin
 
 app = typer.Typer(add_completion=False)
-console = rich.console.Console()
-
-config = default_config | get_config()
-data_path = qstress_path / "_data"
-
-def get_path(file: str) -> pathlib.Path:
-
-    return data_path / file
-
-def compile(source_file: str, bin_file: str, status: typing.Any) -> bool:
-
-    if not data_path.exists():
-        data_path.mkdir()
-
-    status.update(f"Compiling [bold]{source_file}[/]")
-
-    process = subprocess.run(
-        [shutil.which(config["compilerBin"])] + config["compileFlags"] +
-        [str(pathlib.Path.cwd() / source_file), "-o", str(get_path(bin_file))]
-    )
-
-    if process.returncode:
-        console.print()
-        console.print(f"[red]Failed to compile [bold]{source_file}[/][/]")
-        return False
-
-    console.print(f"Compiled [bold]{source_file}[/]")
-
-    return True
-
-def run_bin(bin_file: str, **kwargs) -> subprocess.CompletedProcess:
-
-    return subprocess.run([str(get_path(bin_file))], **kwargs)
 
 @app.command()
-def check() -> None:
+def check(
+    main_file: typing.Annotated[str, typer.Argument(help="File to stress test")],
+    check_file: typing.Annotated[str, typer.Argument(help="File to check outputs")],
+    gen_file: typing.Annotated[str, typer.Argument(help="File to generate tests")],
+    tests: typing.Annotated[
+        int, typer.Option(help="Maximum number of tests to generate")
+    ] = cur_config["tests"],
+    find: typing.Annotated[
+        int, typer.Option(help="Maximum number of failing cases to find")
+    ] = cur_config["find"],
+    folder: typing.Annotated[
+        str, typer.Option(help="Folder to save failing test cases")
+    ] = cur_config["folder"]
+) -> None:
+    """
+    Generates test cases and checks whether output is valid.
+    """
 
-    pass
+    tests_folder = pathlib.Path.cwd() / folder
+
+    if not tests_folder.exists():
+        tests_folder.mkdir()
+    else:
+        for x in tests_folder.iterdir():
+            x.unlink()
+
+    console.print()
+
+    with console.status("") as status:
+        if not compile_file(main_file, "main", status):
+            return
+        if not compile_file(check_file, "check", status):
+            return
+        if not compile_file(gen_file, "gen", status):
+            return
+        console.print()
+        found = 0
+        for i in range(tests):
+            status.update(f"Running on test {i + 1} ({found} / {tests})")
+            with get_path("input.txt").open("w+") as file:
+                run_bin("gen", stdout=file)
+            with get_path("input.txt").open("r") as file:
+                output = run_bin("main", capture_output=True, stdin=file, text=True).stdout
+                valid = run_bin(
+                    "check", capture_output=True, cwd=data_path, input=output, text=True
+                ).stdout.strip()
+                if valid != "1":
+                    shutil.copy(get_path("input.txt"), tests_folder / f"input_{found + 1}.txt")
+                    found += 1
+                if found == find:
+                    break
+        console.print(
+            "[green]Passed {tests} test cases[/]" if found == 0 else
+            f"[red]Found {found} / {find} failing test cases[/]"
+        )
 
 @app.command()
 def cmp(
@@ -58,13 +79,13 @@ def cmp(
     gen_file: typing.Annotated[str, typer.Argument(help="File to generate tests")],
     tests: typing.Annotated[
         int, typer.Option(help="Maximum number of tests to generate")
-    ] = config["tests"],
+    ] = cur_config["tests"],
     find: typing.Annotated[
         int, typer.Option(help="Maximum number of failing cases to find")
-    ] = config["find"],
+    ] = cur_config["find"],
     folder: typing.Annotated[
-        str, typer.Option(help="Folder to save failing cases")
-    ] = config["folder"]
+        str, typer.Option(help="Folder to save failing test cases")
+    ] = cur_config["folder"]
 ) -> None:
     """
     Generates test cases and compares outputs from two programs.
@@ -81,11 +102,11 @@ def cmp(
     console.print()
 
     with console.status("") as status:
-        if not compile(main_file, "main", status):
+        if not compile_file(main_file, "main", status):
             return
-        if not compile(slow_file, "slow", status):
+        if not compile_file(slow_file, "slow", status):
             return
-        if not compile(gen_file, "gen", status):
+        if not compile_file(gen_file, "gen", status):
             return
         console.print()
         found = 0
@@ -103,6 +124,63 @@ def cmp(
             if found == find:
                 break
         console.print(
-            "[green]All tests passed[/]" if found == 0 else
+            f"[green]Passed {tests} test cases[/]" if found == 0 else
             f"[red]Found {found} / {find} failing test cases[/]"
         )
+
+@app.command()
+def config() -> None:
+    """
+    Outputs the current config values.
+    """
+
+    console.print()
+    console.print(cur_config)
+
+@app.command()
+def gen(gen_file: typing.Annotated[str, typer.Argument(help="File to generate tests")]) -> None:
+    """
+    Generates a test case and displays it.
+    """
+
+    console.print()
+
+    with console.status("") as status:
+        if not compile_file(gen_file, "gen", status):
+            return
+
+    console.print()
+    console.print(rich.panel.Panel("\n" + run_bin("gen", capture_output=True, text=True).stdout))
+
+@app.command()
+def view(
+    test: typing.Annotated[int, typer.Argument(help="Test case to view")] = 0,
+    folder: typing.Annotated[
+        str, typer.Option(help="Folder to find test cases")
+    ] = cur_config["folder"],
+    checker: typing.Annotated[bool, typer.Option(help="Use checker mode")] = False
+) -> None:
+    """
+    Views output for failing test cases using compiled binaries.
+    """
+
+    console.print()
+
+    test_folder = pathlib.Path.cwd() / folder
+
+    def display(test_idx: int) -> None:
+        data = (test_folder / f"input_{test_idx}.txt").read_text()
+        name = "Output" if test == 0 else "Output (main)"
+        text = ["\n", "[bold]Input:[/]", "\n", "\n", data, "\n", f"[bold]{name}:[/]", "\n", "\n"]
+        text.append(run_bin("main", capture_output=True, input=data, text=True).stdout)
+        if not checker:
+            text.extend(["\n", "[bold]Output (slow):[/]", "\n", "\n"])
+            text.append(run_bin("slow", capture_output=True, input=data, text=True).stdout)
+        console.print(rich.panel.Panel("".join(text), title=f"[bold]Test {test_idx}[/]"))
+        console.print()
+
+    if test == 0:
+        for i in range(1, len(list(test_folder.iterdir())) + 1):
+            display(i)
+    else:
+        display(test)

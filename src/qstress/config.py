@@ -21,3 +21,5 @@ def get_config() -> dict[str, typing.Any]:
 
     with config_path.open("r") as file:
         return json.load(file)
+
+cur_config = default_config | get_config()
