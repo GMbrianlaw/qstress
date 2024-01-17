@@ -1,4 +1,3 @@
-import filecmp
 import pathlib
 import shutil
 import typing
@@ -6,10 +5,9 @@ import typing
 import rich.panel
 import typer
 
-from .config import cur_config
+from .config import global_config
+from .globals import console
 from .util import compile_file
-from .util import console
-from .util import data_path
 from .util import get_path
 from .util import run_bin
 
@@ -22,13 +20,13 @@ def check(
     gen_file: typing.Annotated[str, typer.Argument(help="File to generate tests")],
     tests: typing.Annotated[
         int, typer.Option(help="Maximum number of tests to generate")
-    ] = cur_config["tests"],
+    ] = global_config["tests"],
     find: typing.Annotated[
         int, typer.Option(help="Maximum number of failing cases to find")
-    ] = cur_config["find"],
+    ] = global_config["find"],
     folder: typing.Annotated[
         str, typer.Option(help="Folder to save failing test cases")
-    ] = cur_config["folder"]
+    ] = global_config["folder"]
 ) -> None:
     """
     Generates test cases and checks whether output is valid.
@@ -55,20 +53,22 @@ def check(
         found = 0
         for i in range(tests):
             status.update(f"Running on test {i + 1} ({found} / {tests})")
-            with get_path("input.txt").open("w+") as file:
+            with get_path("io", "input.txt").open("w+") as file:
                 run_bin("gen", stdout=file)
-            with get_path("input.txt").open("r") as file:
+            with get_path("io", "input.txt").open("r") as file:
                 output = run_bin("main", capture_output=True, stdin=file, text=True).stdout
                 valid = run_bin(
-                    "check", capture_output=True, cwd=data_path, input=output, text=True
+                    "check", capture_output=True, cwd=get_path("io"), input=output, text=True
                 ).stdout.strip()
                 if valid != "1":
-                    shutil.copy(get_path("input.txt"), tests_folder / f"input_{found + 1}.txt")
+                    shutil.copy(
+                        get_path("io", "input.txt"), tests_folder / f"input_{found + 1}.txt"
+                    )
                     found += 1
                 if found == find:
                     break
         console.print(
-            "[green]Passed {tests} test cases[/]" if found == 0 else
+            f"[green]Passed {tests} test cases[/]" if found == 0 else
             f"[red]Found {found} / {find} failing test cases[/]"
         )
 
@@ -79,13 +79,13 @@ def cmp(
     gen_file: typing.Annotated[str, typer.Argument(help="File to generate tests")],
     tests: typing.Annotated[
         int, typer.Option(help="Maximum number of tests to generate")
-    ] = cur_config["tests"],
+    ] = global_config["tests"],
     find: typing.Annotated[
         int, typer.Option(help="Maximum number of failing cases to find")
-    ] = cur_config["find"],
+    ] = global_config["find"],
     folder: typing.Annotated[
         str, typer.Option(help="Folder to save failing test cases")
-    ] = cur_config["folder"]
+    ] = global_config["folder"]
 ) -> None:
     """
     Generates test cases and compares outputs from two programs.
@@ -113,11 +113,9 @@ def cmp(
         for i in range(tests):
             status.update(f"Running on test {i + 1} ({found} / {tests})")
             data = run_bin("gen", capture_output=True, text=True).stdout
-            with get_path("out_1.txt").open("w+") as output_file:
-                run_bin("main", input=data, stdout=output_file, text=True)
-            with get_path("out_2.txt").open("w+") as output_file:
-                run_bin("slow", input=data, stdout=output_file, text=True)
-            if (not filecmp.cmp(str(get_path("out_1.txt")), str(get_path("out_2.txt")), False)):
+            output_1 = run_bin("main", capture_output=True, input=data, text=True).stdout.strip()
+            output_2 = run_bin("slow", capture_output=True, input=data, text=True).stdout.strip()
+            if output_1 != output_2:
                 with (tests_folder / f"input_{found + 1}.txt").open("w+") as file:
                     file.write(data)
                 found += 1
@@ -129,13 +127,27 @@ def cmp(
         )
 
 @app.command()
+def compile(
+    target: typing.Annotated[str, typer.Argument(help="Target binary")],
+    file_name: typing.Annotated[str, typer.Argument(help="File to compile")]
+) -> None:
+    """
+    Compiles a file to a binary, target should be one of [check, gen, main, slow].
+    """
+
+    console.print()
+
+    with console.status("") as status:
+        compile_file(file_name, target, status)
+
+@app.command()
 def config() -> None:
     """
     Outputs the current config values.
     """
 
     console.print()
-    console.print(cur_config)
+    console.print(global_config)
 
 @app.command()
 def gen(gen_file: typing.Annotated[str, typer.Argument(help="File to generate tests")]) -> None:
@@ -157,7 +169,7 @@ def view(
     test: typing.Annotated[int, typer.Argument(help="Test case to view")] = 0,
     folder: typing.Annotated[
         str, typer.Option(help="Folder to find test cases")
-    ] = cur_config["folder"],
+    ] = global_config["folder"],
     checker: typing.Annotated[bool, typer.Option(help="Use checker mode")] = False
 ) -> None:
     """
@@ -170,7 +182,7 @@ def view(
 
     def display(test_idx: int) -> None:
         data = (test_folder / f"input_{test_idx}.txt").read_text()
-        name = "Output" if test == 0 else "Output (main)"
+        name = "Output" if checker else "Output (main)"
         text = ["\n", "[bold]Input:[/]", "\n", "\n", data, "\n", f"[bold]{name}:[/]", "\n", "\n"]
         text.append(run_bin("main", capture_output=True, input=data, text=True).stdout)
         if not checker:

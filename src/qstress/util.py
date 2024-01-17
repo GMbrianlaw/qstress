@@ -3,29 +3,26 @@ import shutil
 import subprocess
 import typing
 
-import rich.console
+from .config import global_config
+from .globals import console
+from .globals import internal_path
 
-from .config import cur_config
-from .config import qstress_path
+def get_path(*args: str) -> pathlib.Path:
 
-console = rich.console.Console()
+    path = internal_path
 
-data_path = qstress_path / "_data"
+    for x in args:
+        path /= x
 
-def get_path(file: str) -> pathlib.Path:
-
-    return data_path / file
+    return path
 
 def compile_file(source_file: str, bin_file: str, status: typing.Any) -> bool:
-
-    if not data_path.exists():
-        data_path.mkdir()
 
     status.update(f"Compiling [bold]{source_file}[/]")
 
     process = subprocess.run(
-        [shutil.which(cur_config["compilerBin"])] + cur_config["compileFlags"] +
-        [str(pathlib.Path.cwd() / source_file), "-o", str(get_path(bin_file))]
+        [shutil.which(global_config["compilerBin"])] + global_config["compileFlags"] +
+        [str(pathlib.Path.cwd() / source_file), "-o", str(get_path("bin", bin_file))]
     )
 
     if process.returncode:
@@ -39,4 +36,4 @@ def compile_file(source_file: str, bin_file: str, status: typing.Any) -> bool:
 
 def run_bin(bin_file: str, **kwargs) -> subprocess.CompletedProcess:
 
-    return subprocess.run([str(get_path(bin_file))], **kwargs)
+    return subprocess.run([str(get_path("bin", bin_file))], **kwargs)

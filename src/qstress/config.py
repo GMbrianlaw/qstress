@@ -1,17 +1,14 @@
 import json
-import pathlib
 import typing
+
+from .globals import qstress_path
 
 default_config = {
     "compilerBin": "g++", "compileFlags": ["-O2", "-std=c++17"], "tests": 200, "find": 1,
     "folder": "test_cases"
 }
-qstress_path = pathlib.Path.home() / ".qstress"
 
 def get_config() -> dict[str, typing.Any]:
-
-    if not qstress_path.exists():
-        qstress_path.mkdir()
 
     config_path = qstress_path / "config.json"
 
@@ -22,4 +19,4 @@ def get_config() -> dict[str, typing.Any]:
     with config_path.open("r") as file:
         return json.load(file)
 
-cur_config = default_config | get_config()
+global_config = default_config | get_config()
