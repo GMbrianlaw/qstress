@@ -52,7 +52,7 @@ def check(
         console.print()
         found = 0
         for i in range(tests):
-            status.update(f"Running on test {i + 1} ({found} / {tests})")
+            status.update(f"Running on test {i + 1} ({found} / {find})")
             with get_path("io", "input.txt").open("w+") as file:
                 run_bin("gen", stdout=file)
             with get_path("io", "input.txt").open("r") as file:
@@ -111,7 +111,7 @@ def cmp(
         console.print()
         found = 0
         for i in range(tests):
-            status.update(f"Running on test {i + 1} ({found} / {tests})")
+            status.update(f"Running on test {i + 1} ({found} / {find})")
             data = run_bin("gen", capture_output=True, text=True).stdout
             output_1 = run_bin("main", capture_output=True, input=data, text=True).stdout.strip()
             output_2 = run_bin("slow", capture_output=True, input=data, text=True).stdout.strip()
