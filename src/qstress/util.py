@@ -31,7 +31,7 @@ def compile_file(source_file: str, target: str, status: typing.Any) -> bool:
         return True
 
     process = subprocess.run(
-        [shutil.which(global_config["compilerBin"])] + global_config["compileFlags"] +
+        [shutil.which(global_config["compilerBin"])] + global_config["compileArgs"] +
         [str(source_path), "-o", str(get_path("bin", target))]
     )
 

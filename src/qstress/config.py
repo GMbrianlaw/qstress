@@ -4,7 +4,7 @@ import typing
 from .globals import qstress_path
 
 default_config = {
-    "compilerBin": "g++", "compileFlags": ["-O2", "-std=c++17"], "tests": 200, "find": 1,
+    "compilerBin": "g++", "compileArgs": ["-O2", "-std=c++17"], "tests": 200, "find": 1,
     "folder": "test_cases"
 }
 
