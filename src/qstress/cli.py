@@ -19,13 +19,13 @@ def check(
     check_file: typing.Annotated[str, typer.Argument(help="File to check outputs")],
     gen_file: typing.Annotated[str, typer.Argument(help="File to generate tests")],
     tests: typing.Annotated[
-        int, typer.Option(help="Maximum number of tests to generate")
+        int, typer.Option(help="Max number of tests to run")
     ] = global_config["tests"],
     find: typing.Annotated[
-        int, typer.Option(help="Maximum number of failing cases to find")
+        int, typer.Option(help="Max number of failing tests to find")
     ] = global_config["find"],
     folder: typing.Annotated[
-        str, typer.Option(help="Folder to save failing test cases")
+        str, typer.Option(help="Folder to save failing tests")
     ] = global_config["folder"]
 ) -> None:
     """
@@ -78,13 +78,13 @@ def cmp(
     slow_file: typing.Annotated[str, typer.Argument(help="File to compare against")],
     gen_file: typing.Annotated[str, typer.Argument(help="File to generate tests")],
     tests: typing.Annotated[
-        int, typer.Option(help="Maximum number of tests to generate")
+        int, typer.Option(help="Max number of tests to run")
     ] = global_config["tests"],
     find: typing.Annotated[
-        int, typer.Option(help="Maximum number of failing cases to find")
+        int, typer.Option(help="Max number of failing tests to find")
     ] = global_config["find"],
     folder: typing.Annotated[
-        str, typer.Option(help="Folder to save failing test cases")
+        str, typer.Option(help="Folder to save failing tests")
     ] = global_config["folder"]
 ) -> None:
     """
